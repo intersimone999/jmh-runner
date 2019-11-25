@@ -170,6 +170,7 @@ end
 
 $files_to_remove         = []
 $additional_dependencies = []
+$additional_properties   = []
 $src_name                = "main"
 $resources_name          = "test"
 $java_version            = "11"
@@ -177,6 +178,7 @@ $jmh_result_folder       = Dir.pwd
 ARGV.each do |arg|
     $files_to_remove         += arg.sub("--rm=", "").split(",")     if arg.start_with? "--rm="
     $additional_dependencies += arg.sub("--dep=", "").split(",")    if arg.start_with? "--dep="
+    $additional_properties    = arg.sub("--prop=", "").split(",")   if arg.start_with? "--prop="
     $resources_name           = arg.sub("--resources=", "")         if arg.start_with? "--resources="
     $java_version             = arg.sub("--java=", "")              if arg.start_with? "--java="
     $jmh_result_folder        = arg.sub("--jmh-folder=", "")        if arg.start_with? "--jmh-folder="
@@ -263,19 +265,19 @@ class Project
     def self.get_pom_dependencies
         dependencies = []
         Project.each_pom do |xml|
-            group_id    = xml.xpath("//project/groupId").text
-            artifact_id = xml.xpath("//project/artifactId").text
-            version     = xml.xpath("//project/version").text
-            type        = xml.xpath("//project/packaging").text
+            group_id    = xml.xpath("/project/groupId").text
+            artifact_id = xml.xpath("/project/artifactId").text
+            version     = xml.xpath("/project/version").text
+            type        = xml.xpath("/project/packaging").text
             
-            parent_group_id    = xml.xpath("//project/parent/groupId").text
-            parent_artifact_id = xml.xpath("//project/parent/artifactId").text
-            parent_version     = xml.xpath("//project/parent/version").text
+            parent_group_id    = xml.xpath("/project/parent/groupId").text
+            parent_artifact_id = xml.xpath("/project/parent/artifactId").text
+            parent_version     = xml.xpath("/project/parent/version").text
             
             group_id    = group_id == "" ? parent_group_id : group_id
             version     = version == ""  ? parent_version  : version
             
-            test_dependencies = xml.xpath("//project/dependencies/dependency[scope='test']") + xml.xpath("//project/profiles/profile/dependencies/dependency")
+            test_dependencies = xml.xpath("/project/dependencies/dependency[scope='test']") + xml.xpath("//dependencies/dependency[scope='test']")
             test_dependencies.each do |dependency|
                 test_dependency = Dependency.new
                 test_dependency.group_id    = dependency.xpath("groupId").text
@@ -309,12 +311,13 @@ class Project
         jmh_versions = Set[]
         
         Project.each_pom do |xml|
-            jmh_dependencies = xml.xpath("//project/dependencies/dependency[groupId='org.openjdk.jmh' and artifactId='jmh-core']")
-            jmh_dependencies += xml.xpath("//project/profiles/profile/dependencies/dependency[groupId='org.openjdk.jmh' and artifactId='jmh-core']")
-            jmh_dependencies.each do |dependency|
-                jmh_versions << dependency.xpath("version").text()
+            jmh_dependency_versions = xml.xpath("//dependencies/dependency[groupId='org.openjdk.jmh' and artifactId='jmh-core']/version")
+            jmh_dependency_versions.each do |version|
+                jmh_versions << version.text
             end
         end
+        
+        jmh_versions.delete_if { |v| v.strip == "" }
             
         if jmh_versions.size == 0
             return nil
@@ -330,7 +333,7 @@ class Project
         all_properties = []
         mapping = {}
         Project.each_pom do |xml|
-            properties = xml.xpath("//project/properties/*")
+            properties = xml.xpath("/project/properties/*")
             properties.each do |property|
                 mapping[property.name] = Set[] unless mapping[property.name]
                 
@@ -351,12 +354,23 @@ class Project
         
         return all_properties
     end
+    
+    def self.get_additional_properties
+        properties = []
+        
+        $additional_properties.each do |property|
+            name, value = property.split("=")
+            properties << "<#{name}>#{value}</#{name}>"
+        end
+        
+        return properties
+    end
 
     def self.get_java_version    
         java_versions = Set[]
         
         Project.each_pom do |xml|
-            compile_plugin = xml.xpath("//project/build/plugins/plugin[artifactId='maven-compiler-plugin']/configuration/source")
+            compile_plugin = xml.xpath("/project/build/plugins/plugin[artifactId='maven-compiler-plugin']/configuration/source")
             if compile_plugin.size > 0
                 java_versions << compile_plugin[0]
             end
@@ -467,10 +481,9 @@ class Phases
             
             java_version = Project.get_java_version
             jmh_version  = Project.get_jmh_version
-            properties   = Project.get_properties
             
-            dependencies = Project.get_pom_dependencies
-            dependencies += Project.get_additional_dependencies
+            properties   = Project.get_properties + Project.get_additional_properties
+            dependencies = Project.get_pom_dependencies + Project.get_additional_dependencies
             
             unless jmh_version
                 Shell.log "There was no JMH found in any POM file in the target project."
@@ -502,6 +515,7 @@ Shell.log "Files to remove: #$files_to_remove"
 Shell.log "Additional dependencies: #$additional_dependencies"
 Shell.log "Resources folder: #$resources_name"
 Shell.log "Default Java version (if not specified): #$java_version"
+Shell.log "Additional properties: #$additional_properties"
 
 Shell.separator
 Shell.log "Starting procedure"

@@ -32,6 +32,7 @@ Example: `ruby run-benchmarks.rb commons-csv --dep=javax.annotation:javax.annota
 Available options:
 
 - `--dep={dependencies}`: comma-separated list of additional dependencies. The format should be `{group-id}:{artifact-id}:{version}` (e.g., `javax.annotation:javax.annotation-api:1.3.1`);
+- `--prop={properties}`: comma-separated list of additional properties. The format should be `{property}={value}`;
 - `--resources={name}`: which resource folder should be used. By default, the one in `test` is used. Should refer to one of the folders in the `main` folder of the module containing benchmarks;
 - `--java={version}`: sets the default Java version to use if no version is found in the pom (11 by default);
 - `--jmh-folder={path}`: sets the output directory;
