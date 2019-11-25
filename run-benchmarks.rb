@@ -1,5 +1,9 @@
 #!/usr/bin/ruby
 
+require "nokogiri"
+require "set"
+require "optparse"
+
 ARCHETYPE_POM = <<EOF
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -130,10 +134,50 @@ JMH_BASE = "art-jmh-env"
 GOOD_BUILD_STRING = "[INFO] BUILD SUCCESS"
 LOG_EXT = ".log"
 
-require "nokogiri"
-require "set"
+$files_to_remove         = []
+$additional_dependencies = []
+$additional_properties   = []
+$src_name                = "main"
+$resources_name          = "test"
+$java_version            = "11"
+$jmh_result_folder       = Dir.pwd
+$testing_mode            = false
+
+OptionParser.new do |opts|
+    opts.banner = "Usage: run-benchmarks.rb [options] directory"
+    
+    opts.on("-r", "--rm [FILES]", "comma-separated list of files. Removes the specified file before building. The path should be relative to the source folder (e.g., 'it/unimol/TestClass.java')") do |files|
+        $files_to_remove = files.split(",")
+    end
+    
+    opts.on("-d", "--dep [DEPENDENCIES]", "comma-separated list of additional dependencies. The format should be {group-id}:{artifact-id}:{version} (e.g., 'javax.annotation:javax.annotation-api:1.3.1')") do |deps|
+        $additional_dependencies = deps.split(",")
+    end
+    
+    opts.on("-p", "--prop [PROPERTIES]", "comma-separated list of additional properties. The format should be '{property}={value}'") do |props|
+        $additional_properties = props.split(",")
+    end
+    
+    opts.on("-R", "--resources [FOLDER]", "which resource folder should be used. By default, the one in test is used. Should refer to one of the folders in the main folder of the module containing benchmarks") do |resources|
+        $resources_name = resources
+    end
+    
+    opts.on("-j", "--java [VERSION]", "sets the default Java version to use if no version is found in the pom (11 by default)") do |java|
+        $java_version = java
+    end
+    
+    opts.on("-o", "--jmh-folder [FOLDER]", "sets the output directory") do |jmh|
+        $jmh_result_folder = jmh
+    end
+    
+    opts.on("-h", "--help", "shows this help") do |help|
+        warn opts
+        exit 0
+    end
+end.parse!
 
 DIRECTORY = ARGV[0]
+
 unless DIRECTORY
     warn "Please, specify the build directory."
     exit -1
@@ -166,22 +210,6 @@ class Shell
     def self.separator(char="-")
         self.log char*60, false
     end
-end
-
-$files_to_remove         = []
-$additional_dependencies = []
-$additional_properties   = []
-$src_name                = "main"
-$resources_name          = "test"
-$java_version            = "11"
-$jmh_result_folder       = Dir.pwd
-ARGV.each do |arg|
-    $files_to_remove         += arg.sub("--rm=", "").split(",")     if arg.start_with? "--rm="
-    $additional_dependencies += arg.sub("--dep=", "").split(",")    if arg.start_with? "--dep="
-    $additional_properties    = arg.sub("--prop=", "").split(",")   if arg.start_with? "--prop="
-    $resources_name           = arg.sub("--resources=", "")         if arg.start_with? "--resources="
-    $java_version             = arg.sub("--java=", "")              if arg.start_with? "--java="
-    $jmh_result_folder        = arg.sub("--jmh-folder=", "")        if arg.start_with? "--jmh-folder="
 end
 
 class Dependency
@@ -530,8 +558,12 @@ Shell.log "Benchmark preparation started"
 Phases.prepare_benchmarks
 
 Shell.separator
-Shell.log "Benchmark build and run started"
-Phases.run_benchmarks
+unless $testing
+    Shell.log "Benchmark build and run started"
+    Phases.run_benchmarks
+else
+    Shell.log "Skipping benchmark because of testing option. Everything seems to work fine."
+end
 
 Shell.separator
 Shell.log "All done"
