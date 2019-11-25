@@ -1,4 +1,5 @@
 #!/usr/bin/ruby
+VERSION = '0.1.1'
 
 require "nokogiri"
 require "set"
@@ -144,7 +145,7 @@ $jmh_result_folder       = Dir.pwd
 $testing_mode            = false
 
 OptionParser.new do |opts|
-    opts.banner = "Usage: run-benchmarks.rb [options] directory"
+    opts.banner = "JMH benchmark runner, version #{VERSION}\nUsage: run-benchmarks.rb [options] directory"
     
     opts.on("-r", "--rm [FILES]", "comma-separated list of files. Removes the specified file before building. The path should be relative to the source folder (e.g., 'it/unimol/TestClass.java')") do |files|
         $files_to_remove = files.split(",")
@@ -168,6 +169,15 @@ OptionParser.new do |opts|
     
     opts.on("-o", "--jmh-folder [FOLDER]", "sets the output directory") do |jmh|
         $jmh_result_folder = jmh
+    end
+    
+    opts.on("-v", "--version", "shows the current version") do |v|
+        puts "Version #{VERSION}"
+        exit 0
+    end
+    
+    opts.on("-T", "--test", "runs in testing mode (does not run the benchmarks)") do |testing|
+        $testing_mode = true
     end
     
     opts.on("-h", "--help", "shows this help") do |help|
@@ -218,9 +228,11 @@ class Dependency
     attr_accessor   :version
     attr_accessor   :type
     
-    MVN_PATH = Shell.run("mvn help:evaluate -Dexpression=settings.localRepository | grep -v '\[INFO\]'").chomp.strip
+    @@mvn_path = nil
     
     def initialize
+        @@mvn_path = Shell.run("mvn help:evaluate -Dexpression=settings.localRepository | grep -v '\[INFO\]'").chomp.strip unless @@mvn_path
+        
         @group_id = ""
         @artifact_id = ""
         @version = ""
@@ -228,7 +240,7 @@ class Dependency
     end
     
     def exist?
-        return FileTest.exist?(File.join(MVN_PATH, @group_id.gsub('.', '/'), @artifact_id.gsub('.', '/'), @version))
+        return FileTest.exist?(File.join(@@mvn_path, @group_id.gsub('.', '/'), @artifact_id.gsub('.', '/'), @version))
     end
     
     def jmh?
@@ -538,6 +550,8 @@ end
 
 Shell.log_file = File.join($jmh_result_folder, Project.name + LOG_EXT)
 
+Shell.log "Version #{VERSION}"
+Shell.log "<!><!><!> The program is running in testing mode. No benchmark will be executed. <!><!><!>" if $testing_mode
 Shell.separator "#"
 Shell.log "Files to remove: #$files_to_remove"
 Shell.log "Additional dependencies: #$additional_dependencies"
@@ -558,7 +572,7 @@ Shell.log "Benchmark preparation started"
 Phases.prepare_benchmarks
 
 Shell.separator
-unless $testing
+unless $testing_mode
     Shell.log "Benchmark build and run started"
     Phases.run_benchmarks
 else
