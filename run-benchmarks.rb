@@ -231,7 +231,7 @@ class Dependency
     @@mvn_path = nil
     
     def initialize
-        @@mvn_path = Shell.run("mvn help:evaluate -Dexpression=settings.localRepository | grep -v '\[INFO\]'").chomp.strip unless @@mvn_path
+        @@mvn_path = Shell.run("mvn --batch-mode help:evaluate -Dexpression=settings.localRepository | grep -v '\[INFO\]'").chomp.strip unless @@mvn_path
         
         @group_id = ""
         @artifact_id = ""
@@ -272,7 +272,7 @@ class JMH
             f.write instance_pom
         end
         
-        result = Shell.run "mvn clean package -DskipTests"
+        result = Shell.run "mvn --batch-mode clean package -DskipTests"
         
         return result
     end
@@ -473,7 +473,7 @@ class Phases
     def self.build_project
         Dir.chdir(DIRECTORY) do
             Shell.log "Running maven build..."
-            build_result = Shell.run "mvn clean install -DskipTests"
+            build_result = Shell.run "mvn --batch-mode clean install -DskipTests"
 
             unless build_result.include? GOOD_BUILD_STRING
                 Shell.log build_result
