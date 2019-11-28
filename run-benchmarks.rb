@@ -134,8 +134,8 @@ EOF
 JMH_BASE = "art-jmh-env"
 GOOD_BUILD_STRING = "[INFO] BUILD SUCCESS"
 LOG_EXT = ".log"
-MAVEN_BIN = ENV["MVN_BIN"]   || raise "You need to set the MVN_BIN environment variable to run the script."
-JAVA_HOME = ENV["JAVA_HOME"] || raise "You need to set the JAVA_HOME environment variable to run the script."
+MAVEN_BIN = ENV["MVN_BIN"]   || raise("You need to set the MVN_BIN environment variable to run the script.")
+JAVA_HOME = ENV["JAVA_HOME"] || raise("You need to set the JAVA_HOME environment variable to run the script.")
 
 $files_to_remove         = []
 $additional_dependencies = []

@@ -25,6 +25,11 @@ Requirements:
 - Ruby gem nokogiri (version 1.10.4) (`gem install nokogiri`).
 
 ## Run
+To run the script, you need to set two environment variables:
+
+- `MVN_BIN`: path to the maven executable. If installed in the system, you can simply set `MVN_BIN=mvn`
+- `JAVA_HOME`: path of the JDK home folder (not needed by the script, but may be needed by the project)
+
 Usage: `ruby run-benchmarks.rb {project-root} [options]`.
 
 Example: `ruby run-benchmarks.rb commons-csv --dep=javax.annotation:javax.annotation-api:1.3.1`
