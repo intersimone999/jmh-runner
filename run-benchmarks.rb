@@ -134,6 +134,8 @@ EOF
 JMH_BASE = "art-jmh-env"
 GOOD_BUILD_STRING = "[INFO] BUILD SUCCESS"
 LOG_EXT = ".log"
+MAVEN_BIN = ENV["MVN_BIN"]   || raise "You need to set the MVN_BIN environment variable to run the script."
+JAVA_HOME = ENV["JAVA_HOME"] || raise "You need to set the JAVA_HOME environment variable to run the script."
 
 $files_to_remove         = []
 $additional_dependencies = []
@@ -231,7 +233,7 @@ class Dependency
     @@mvn_path = nil
     
     def initialize
-        @@mvn_path = Shell.run("mvn --batch-mode help:evaluate -Dexpression=settings.localRepository | grep -v '\[INFO\]'").chomp.strip unless @@mvn_path
+        @@mvn_path = Shell.run("#{MAVEN_BIN} --batch-mode help:evaluate -Dexpression=settings.localRepository | grep -v '\[INFO\]'").chomp.strip unless @@mvn_path
         
         @group_id = ""
         @artifact_id = ""
@@ -272,7 +274,7 @@ class JMH
             f.write instance_pom
         end
         
-        result = Shell.run "mvn --batch-mode clean package -DskipTests"
+        result = Shell.run "#{MAVEN_BIN} --batch-mode clean package -DskipTests"
         
         return result
     end
@@ -473,7 +475,7 @@ class Phases
     def self.build_project
         Dir.chdir(DIRECTORY) do
             Shell.log "Running maven build..."
-            build_result = Shell.run "mvn --batch-mode clean install -DskipTests"
+            build_result = Shell.run "#{MAVEN_BIN} --batch-mode clean install -DskipTests"
 
             unless build_result.include? GOOD_BUILD_STRING
                 Shell.log build_result
