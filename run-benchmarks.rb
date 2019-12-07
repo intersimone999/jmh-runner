@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-VERSION = '0.1.1'
+VERSION = '0.1.2'
 
 require "nokogiri"
 require "set"
@@ -414,7 +414,7 @@ class Project
         Project.each_pom do |xml|
             compile_plugin = xml.xpath("/project/build/plugins/plugin[artifactId='maven-compiler-plugin']/configuration/source")
             if compile_plugin.size > 0
-                java_versions << compile_plugin[0]
+                java_versions << compile_plugin[0].text
             end
         end
         
