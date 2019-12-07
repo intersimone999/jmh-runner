@@ -600,6 +600,7 @@ Shell.log "Files to remove: #$files_to_remove"
 Shell.log "Additional dependencies: #$additional_dependencies"
 Shell.log "Resources folder: #$resources_name"
 Shell.log "Default Java version (if not specified): #$java_version"
+Shell.log "Default JMH version (if not specified): #$jmh_version" if $jmh_version
 Shell.log "Additional properties: #$additional_properties"
 
 Shell.separator
