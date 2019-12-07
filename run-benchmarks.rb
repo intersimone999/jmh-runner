@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-VERSION = '0.1.2'
+VERSION = '0.1.3'
 
 require "nokogiri"
 require "set"
@@ -224,6 +224,28 @@ class Shell
     end
 end
 
+class Property
+    attr_accessor   :name
+    attr_accessor   :value
+    
+    def initialize(name, value)
+        @name = name
+        @value = value
+    end
+    
+    def eql?(oth)
+        return @name == oth.name
+    end
+    
+    def hash
+        @name.hash
+    end
+    
+    def to_s
+        "<#@name>#@value</#@name>"
+    end
+end
+
 class Dependency
     attr_accessor   :group_id
     attr_accessor   :artifact_id
@@ -255,6 +277,14 @@ class Dependency
     
     def to_s
         "<dependency><groupId>#@group_id</groupId><artifactId>#@artifact_id</artifactId><version>#@version</version>#{ @type != "" ? "<type>#@type</type>" : ""}</dependency>"
+    end
+    
+    def eql?(oth)
+        return @group_id == oth.group_id && @artifact_id == oth.artifact_id && @version == oth.version
+    end
+    
+    def hash
+        return @group_id.hash + @artifact_id.hash + @version.hash
     end
     
     def readable_string
@@ -390,7 +420,7 @@ class Project
             values = values.to_a
             if values.size == 1
                 Shell.log "\tImporting property #{name} => #{values[0]}"
-                all_properties << "<#{name}>#{values[0]}</#{name}>"
+                all_properties << Property.new(name, values[0])
             end
         end
         
@@ -402,7 +432,7 @@ class Project
         
         $additional_properties.each do |property|
             name, value = property.split("=")
-            properties << "<#{name}>#{value}</#{name}>"
+            properties << Property.new(name, value)
         end
         
         return properties
@@ -526,6 +556,7 @@ class Phases
             
             properties   = Project.get_properties + Project.get_additional_properties
             dependencies = Project.get_pom_dependencies + Project.get_additional_dependencies
+            dependencies.uniq!
             
             unless jmh_version
                 Shell.log "There was no JMH found in any POM file in the target project."
