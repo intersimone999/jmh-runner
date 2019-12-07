@@ -422,8 +422,8 @@ class Project
             Shell.log "There was no Java version found in any POM file in the target project. Using Java #$java_version"
             return $java_version
         elsif java_versions.size > 1
-            Shell.log "There were many Java versions found: #{java_versions.sort.join(",")}. Using the earliest one."
-            return java_versions.sort[0]
+            Shell.log "There were many Java versions found: #{java_versions.sort.join(",")}. Using the latest one."
+            return java_versions.sort[-1]
         else
             return java_versions.to_a[0]
         end
