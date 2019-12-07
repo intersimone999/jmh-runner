@@ -494,7 +494,7 @@ class Phases
                 source_directories << Project.get_source_directory(benchmark_file)
             end
             
-            Shell.log "Source directories: #{source_directories.to_s}"
+            Shell.log "Source directories: #{source_directories.to_a.to_s}"
             source_directories.each do |src|
                 real_src = File.join(src, "*")
                 real_dst = File.join(JMH_BASE, "src", $src_name)
