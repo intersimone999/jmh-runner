@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-VERSION = '0.1.3'
+VERSION = '0.1.4'
 
 require "nokogiri"
 require "set"
@@ -143,6 +143,7 @@ $additional_properties   = []
 $src_name                = "main"
 $resources_name          = "test"
 $java_version            = "11"
+$jmh_version             = nil
 $jmh_result_folder       = Dir.pwd
 $testing_mode            = false
 
@@ -167,6 +168,10 @@ OptionParser.new do |opts|
     
     opts.on("-j", "--java [VERSION]", "sets the default Java version to use if no version is found in the pom (11 by default)") do |java|
         $java_version = java
+    end
+    
+    opts.on("-J", "--jmh [JMH]", "sets the default JMH version to use if no version is found in the pom (raises an error by default)") do |jmh|
+        $jmh_version = jmh
     end
     
     opts.on("-o", "--jmh-folder [FOLDER]", "sets the output directory") do |jmh|
@@ -559,9 +564,14 @@ class Phases
             dependencies.uniq!
             
             unless jmh_version
-                Shell.log "There was no JMH found in any POM file in the target project."
-                Shell.log "Aborting..."
-                exit -1
+                if $jmh_version
+                    Shell.log "There was no JMH found in any POM file in the target project. Using the one specified in the command line."
+                    jmh_version = $jmh_version
+                else
+                    Shell.log "There was no JMH found in any POM file in the target project."
+                    Shell.log "Aborting."
+                    exit -1
+                end
             end
             
             Shell.log "Using JMH version #{jmh_version}"
