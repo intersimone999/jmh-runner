@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-VERSION = '0.1.4'
+VERSION = '0.1.5'
 
 require "nokogiri"
 require "set"
@@ -146,6 +146,7 @@ $java_version            = "11"
 $jmh_version             = nil
 $jmh_result_folder       = Dir.pwd
 $testing_mode            = false
+$maven_options           = []
 
 OptionParser.new do |opts|
     opts.banner = "JMH benchmark runner, version #{VERSION}\nUsage: run-benchmarks.rb [options] directory"
@@ -158,7 +159,7 @@ OptionParser.new do |opts|
         $additional_dependencies = deps.split(",")
     end
     
-    opts.on("-p", "--prop [PROPERTIES]", "comma-separated list of additional properties. The format should be '{property}={value}'") do |props|
+    opts.on("-D", "--prop [PROPERTIES]", "comma-separated list of additional properties. The format should be '{property}={value}'") do |props|
         $additional_properties = props.split(",")
     end
     
@@ -176,6 +177,10 @@ OptionParser.new do |opts|
     
     opts.on("-o", "--jmh-folder [FOLDER]", "sets the output directory") do |jmh|
         $jmh_result_folder = jmh
+    end
+    
+    opts.on("-mO", "--maven-options [OPTIONS]", "semicolon-separated list of commands to pass to the maven build") do |options|
+        $maven_options = options.split(";")
     end
     
     opts.on("-v", "--version", "shows the current version") do |v|
@@ -510,7 +515,7 @@ class Phases
     def self.build_project
         Dir.chdir(DIRECTORY) do
             Shell.log "Running maven build..."
-            build_result = Shell.run "#{MAVEN_BIN} --batch-mode clean install -DskipTests"
+            build_result = Shell.run "#{MAVEN_BIN} --batch-mode clean install -DskipTests #$maven_options"
 
             unless build_result.include? GOOD_BUILD_STRING
                 Shell.log build_result
