@@ -179,7 +179,7 @@ OptionParser.new do |opts|
         $jmh_result_folder = jmh
     end
     
-    opts.on("-mO", "--maven-options [OPTIONS]", "semicolon-separated list of commands to pass to the maven build") do |options|
+    opts.on("-M", "--maven-options [OPTIONS]", "semicolon-separated list of commands to pass to the maven build") do |options|
         $maven_options = options.split(";")
     end
     
