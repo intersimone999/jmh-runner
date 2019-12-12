@@ -180,7 +180,7 @@ OptionParser.new do |opts|
     end
     
     opts.on("-M", "--maven-options [OPTIONS]", "semicolon-separated list of commands to pass to the maven build") do |options|
-        $maven_options = options.split(";")
+        $maven_options = options.split(";").join(" ")
     end
     
     opts.on("-v", "--version", "shows the current version") do |v|
