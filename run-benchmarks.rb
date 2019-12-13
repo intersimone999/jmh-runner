@@ -12,7 +12,7 @@ ARCHETYPE_POM = <<EOF
 
     <groupId>it.unimol</groupId>
     <artifactId>jmh-generic-runner</artifactId>
-    <version>1.0</version>
+    <version>{{version}}</version>
     <packaging>jar</packaging>
 
     <name>JMH Generic runner</name>
@@ -30,14 +30,14 @@ ARCHETYPE_POM = <<EOF
             <scope>provided</scope>
         </dependency>
 
-        {dependencies}
+        {{dependencies}}
     </dependencies>
 
     <properties>
-        {properties}
+        {{properties}}
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <jmhrbautobenchmark.jmh.version>{jmh-version}</jmhrbautobenchmark.jmh.version>
-        <jmhrbautobenchmark.javac.target>{java-version}</jmhrbautobenchmark.javac.target>
+        <jmhrbautobenchmark.jmh.version>{{jmh-version}}</jmhrbautobenchmark.jmh.version>
+        <jmhrbautobenchmark.javac.target>{{java-version}}</jmhrbautobenchmark.javac.target>
         <jmhrbautobenchmark.uberjar.name>benchmarks</jmhrbautobenchmark.uberjar.name>
     </properties>
 
@@ -128,6 +128,9 @@ ARCHETYPE_POM = <<EOF
         </pluginManagement>
     </build>
 
+    <repositories>
+        {{repositories}}
+    </repositories>
 </project>
 EOF
 
@@ -258,6 +261,34 @@ class Property
     end
 end
 
+class Repository
+    attr_accessor   :id
+    attr_accessor   :url
+    attr_accessor   :layout
+    
+    def initialize
+        @id = nil
+        @url = nil
+        @layout = nil
+    end
+    
+    def eql?(oth)
+        return @id == oth.id && @url == oth.url
+    end
+    
+    def hash
+        @id.hash + @url.hash
+    end
+    
+    def to_s
+        id_part     = "<id>#@id</id>"
+        url_part    = "<url>#@url</url>"
+        layout_part = @layout ? "<layout>#@layout</layout>" : ""
+        
+        return "<repository>" + id_part + url_part + layout_part + "</repository>"
+    end
+end
+
 class Dependency
     attr_accessor   :group_id
     attr_accessor   :artifact_id
@@ -305,12 +336,14 @@ class Dependency
 end
 
 class JMH
-    def self.build(java_version, jmh_version, dependencies, properties)
+    def self.build(java_version, jmh_version, project_version, dependencies, properties, repositories=[])
         instance_pom = ARCHETYPE_POM.clone
-        instance_pom.gsub!("{java-version}", java_version)
-        instance_pom.gsub!("{jmh-version}", jmh_version)
-        instance_pom.gsub!("{dependencies}", dependencies.join("\n"))
-        instance_pom.gsub!("{properties}", properties.join("\n"))
+        instance_pom.gsub!("{{java-version}}", java_version)
+        instance_pom.gsub!("{{jmh-version}}", jmh_version)
+        instance_pom.gsub!("{{dependencies}}", dependencies.join("\n"))
+        instance_pom.gsub!("{{properties}}", properties.join("\n"))
+        instance_pom.gsub!("{{version}}", project_version)
+        instance_pom.gsub!("{{repositories}}", repositories.join("\n"))
         
         File.open("pom.xml", "w") do |f|
             f.write instance_pom
@@ -368,11 +401,9 @@ class Project
                 test_dependency.artifact_id = dependency.xpath("artifactId").text
                 test_dependency.version     = dependency.xpath("version").text
                 
-                if test_dependency.valid?
-                    unless test_dependency.jmh?
-                        Shell.log "\tImporting test dependency #{test_dependency.readable_string}"
-                        dependencies << test_dependency
-                    end
+                if test_dependency.valid? && !test_dependency.jmh?
+                    Shell.log "\tImporting test dependency #{test_dependency.readable_string}"
+                    dependencies << test_dependency
                 end
             end
             
@@ -389,6 +420,42 @@ class Project
         end
         
         return dependencies
+    end
+    
+    def self.get_repositories
+        repositories = Set[]
+        
+        Project.each_pom do |xml|
+            xml.xpath("/project/repositories/repository").each do |repository|
+                repo = Repository.new
+                repo.id     = repository.xpath("id").text
+                repo.url    = repository.xpath("url").text
+                repo.layout = repository.xpath("layout").text
+                
+                repositories << repo
+            end
+        end
+        
+        return repositories.to_a
+    end
+    
+    def self.get_version
+        versions = Set[]
+        Project.each_pom do |xml|
+            version = xml.xpath("/project/version").text            
+            versions << version
+        end
+        
+        if versions.size == 1
+            return versions.to_a[0]
+        elsif versions.size == 0
+            Shell.log("\tNo project version specified. Falling back to 1.0.")
+            return "1.0"
+        else
+            version = versions.to_a.sort[-1]
+            Shell.log("\tToo many project versions specified: #{versions}. Using the latest one: #{version}.")
+            return version
+        end
     end
     
     def self.get_jmh_version    
@@ -563,8 +630,10 @@ class Phases
                 Shell.run "rm \"#{path}\""
             end
             
-            java_version = Project.get_java_version
-            jmh_version  = Project.get_jmh_version
+            java_version    = Project.get_java_version
+            jmh_version     = Project.get_jmh_version
+            project_version = Project.get_version
+            repositories    = Project.get_repositories
             
             properties   = Project.get_properties + Project.get_additional_properties
             dependencies = Project.get_pom_dependencies + Project.get_additional_dependencies
@@ -584,7 +653,7 @@ class Phases
             Shell.log "Using JMH version #{jmh_version}"
             Dir.chdir JMH_BASE do
                 Shell.log "Building benchmarks"
-                result = JMH.build java_version, jmh_version, dependencies, properties
+                result = JMH.build java_version, jmh_version, project_version, dependencies, properties, repositories
                 unless result.include? GOOD_BUILD_STRING
                     Shell.log result
                     Shell.log "Could not build benchmarks"
