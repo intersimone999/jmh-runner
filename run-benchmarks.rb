@@ -555,7 +555,7 @@ class Phases
         end
     end
     
-    def self.run_benchmarks
+    def self.run_benchmarks(run=true)
         Dir.chdir(DIRECTORY) do
             $files_to_remove.each do |to_remove|
                 path = File.join(JMH_BASE, "src", $src_name, "java", to_remove)
@@ -591,8 +591,12 @@ class Phases
                     exit -1
                 end
                 
-                Shell.log "Running benchmarks..."
-                result = JMH.run
+                if run
+                    Shell.log "Running benchmarks..."
+                    result = JMH.run
+                else
+                    Shell.log "Skipping benchmark run."
+                end
             end
         end
     end
@@ -623,12 +627,8 @@ Shell.log "Benchmark preparation started"
 Phases.prepare_benchmarks
 
 Shell.separator
-unless $testing_mode
-    Shell.log "Benchmark build and run started"
-    Phases.run_benchmarks
-else
-    Shell.log "Skipping benchmark because of testing option. Everything seems to work fine."
-end
+Shell.log "Benchmark build and run started"
+Phases.run_benchmarks(!$testing_mode)
 
 Shell.separator
 Shell.log "All done"
