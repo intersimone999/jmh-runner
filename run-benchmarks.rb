@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-VERSION = '0.1.5'
+VERSION = '0.1.7'
 
 require "nokogiri"
 require "set"
@@ -10,7 +10,7 @@ ARCHETYPE_POM = <<EOF
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>it.unimol</groupId>
+    <groupId>{{groupId}}</groupId>
     <artifactId>jmh-generic-runner</artifactId>
     <version>{{version}}</version>
     <packaging>jar</packaging>
@@ -336,13 +336,16 @@ class Dependency
 end
 
 class JMH
-    def self.build(java_version, jmh_version, project_version, dependencies, properties, repositories=[])
+    @@jars = []
+    
+    def self.build(java_version, jmh_version, project_group_id, project_version, dependencies, properties, repositories=[])
         instance_pom = ARCHETYPE_POM.clone
         instance_pom.gsub!("{{java-version}}", java_version)
         instance_pom.gsub!("{{jmh-version}}", jmh_version)
         instance_pom.gsub!("{{dependencies}}", dependencies.join("\n"))
         instance_pom.gsub!("{{properties}}", properties.join("\n"))
         instance_pom.gsub!("{{version}}", project_version)
+        instance_pom.gsub!("{{groupId}}", project_group_id)
         instance_pom.gsub!("{{repositories}}", repositories.join("\n"))
         
         File.open("pom.xml", "w") do |f|
@@ -351,11 +354,21 @@ class JMH
         
         result = Shell.run "#{MAVEN_BIN} --batch-mode clean package -DskipTests"
         
+        JMH.set_jars(["target/benchmarks.jar"])
+        
         return result
     end
     
+    def self.set_jars(jars)
+        @@jars = jars
+    end
+    
     def self.run
-        Shell.run "java -jar target/benchmarks.jar -rf json -rff \"#$jmh_result_folder/#{Project.name}.json\""
+        i = ""
+        @@jars.each do |jar|
+            Shell.run "java -jar \"#{jar}\" -rf json -rff \"#$jmh_result_folder/#{Project.name}#{i}.json\""
+            i = (i.to_i + 1).to_s
+        end
     end
 end
 
@@ -458,6 +471,28 @@ class Project
         end
     end
     
+    def self.get_group_id
+        groups = Set[]
+        Project.each_pom do |xml|
+            parent_group_id = xml.xpath("/project/parent/groupId").text
+            group_id        = xml.xpath("/project/groupId").text
+            
+            groups << parent_group_id   if parent_group_id && parent_group_id.strip != ""
+            groups << group_id          if group_id        && group_id.strip != ""
+        end
+        
+        if groups.size == 1
+            return groups.to_a[0]
+        elsif groups.size == 0
+            Shell.log("Cannot get the group id. This should never happen. Aborting.")
+            exit -1
+        else
+            group_id = groups.to_a.sort[-1]
+            Shell.log("\tToo many project group ids specified: #{groups}. Using the last one: #{group_id}.")
+            return group_id
+        end
+    end
+    
     def self.get_jmh_version    
         jmh_versions = Set[]
         
@@ -478,6 +513,10 @@ class Project
         else
             return jmh_versions.to_a[0]
         end
+    end
+    
+    def self.paths_to_benchmarks
+        Dir.glob("**/benchmarks.jar")
     end
 
     def self.get_properties
@@ -624,47 +663,60 @@ class Phases
     
     def self.run_benchmarks(run=true)
         Dir.chdir(DIRECTORY) do
-            $files_to_remove.each do |to_remove|
-                path = File.join(JMH_BASE, "src", $src_name, "java", to_remove)
-                Shell.log "Forcing removal of #{path}"
-                Shell.run "rm \"#{path}\""
-            end
-            
-            java_version    = Project.get_java_version
-            jmh_version     = Project.get_jmh_version
-            project_version = Project.get_version
-            repositories    = Project.get_repositories
-            
-            properties   = Project.get_properties + Project.get_additional_properties
-            dependencies = Project.get_pom_dependencies + Project.get_additional_dependencies
-            dependencies.uniq!
-            
-            unless jmh_version
-                if $jmh_version
-                    Shell.log "There was no JMH found in any POM file in the target project. Using the one specified in the command line."
-                    jmh_version = $jmh_version
-                else
-                    Shell.log "There was no JMH found in any POM file in the target project."
-                    Shell.log "Aborting."
-                    exit -1
-                end
-            end
-            
-            Shell.log "Using JMH version #{jmh_version}"
-            Dir.chdir JMH_BASE do
-                Shell.log "Building benchmarks"
-                result = JMH.build java_version, jmh_version, project_version, dependencies, properties, repositories
-                unless result.include? GOOD_BUILD_STRING
-                    Shell.log result
-                    Shell.log "Could not build benchmarks"
-                    exit -1
-                end
-                
+            available_benchmarks = Project.paths_to_benchmarks
+            if available_benchmarks.size > 0
+                Shell.log "Using available uberjars for benchmarks: #{available_benchmarks}"
+                JMH.set_jars(available_benchmarks)
                 if run
                     Shell.log "Running benchmarks..."
-                    result = JMH.run
+                    JMH.run
                 else
                     Shell.log "Skipping benchmark run."
+                end
+            else
+                $files_to_remove.each do |to_remove|
+                    path = File.join(JMH_BASE, "src", $src_name, "java", to_remove)
+                    Shell.log "Forcing removal of #{path}"
+                    Shell.run "rm \"#{path}\""
+                end
+                
+                java_version        = Project.get_java_version
+                jmh_version         = Project.get_jmh_version
+                project_group_id    = Project.get_group_id
+                project_version     = Project.get_version
+                repositories        = Project.get_repositories
+                
+                properties   = Project.get_properties + Project.get_additional_properties
+                dependencies = Project.get_pom_dependencies + Project.get_additional_dependencies
+                dependencies.uniq!
+                
+                unless jmh_version
+                    if $jmh_version
+                        Shell.log "There was no JMH found in any POM file in the target project. Using the one specified in the command line."
+                        jmh_version = $jmh_version
+                    else
+                        Shell.log "There was no JMH found in any POM file in the target project."
+                        Shell.log "Aborting."
+                        exit -1
+                    end
+                end
+                
+                Shell.log "Using JMH version #{jmh_version}"
+                Dir.chdir JMH_BASE do
+                    Shell.log "Building benchmarks"
+                    result = JMH.build java_version, jmh_version, project_group_id, project_version, dependencies, properties, repositories
+                    unless result.include? GOOD_BUILD_STRING
+                        Shell.log result
+                        Shell.log "Could not build benchmarks"
+                        exit -1
+                    end
+                    
+                    if run
+                        Shell.log "Running benchmarks..."
+                        result = JMH.run
+                    else
+                        Shell.log "Skipping benchmark run."
+                    end
                 end
             end
         end
