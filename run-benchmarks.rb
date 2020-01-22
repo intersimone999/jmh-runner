@@ -308,7 +308,7 @@ class Dependency
     
     def exist?
         folder = File.join(@@mvn_path, @group_id.gsub('.', '/'), @artifact_id.gsub('.', '/'), @version)
-        return FileTest.exist?(folder) && Dir.glob(File.join(folder, "*.jar")).size > 0
+        return FileTest.exist?(folder) && (Dir.glob(File.join(folder, "*.jar")).size > 0 || Dir.glob(File.join(folder, "*.pom")).size > 0)
     end
     
     def jmh?
