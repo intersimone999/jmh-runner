@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-VERSION = '0.1.8'
+VERSION = '0.1.9'
 
 require "nokogiri"
 require "set"
@@ -308,7 +308,7 @@ class Dependency
     
     def exist?
         folder = File.join(@@mvn_path, @group_id.gsub('.', '/'), @artifact_id.gsub('.', '/'), @version)
-        return FileTest.exist?(folder) && (Dir.glob(File.join(folder, "*.jar")).size > 0 || Dir.glob(File.join(folder, "*.pom")).size > 0)
+        return FileTest.exist?(folder) # && (Dir.glob(File.join(folder, "*.jar")).size > 0 || Dir.glob(File.join(folder, "*.pom")).size > 0)
     end
     
     def jmh?
@@ -394,7 +394,9 @@ class Project
     end
 
     def self.get_pom_dependencies
-        dependencies = []
+        parent_dependencies = []
+        dependencies        = []
+        all_test_dependencies = []
         Project.each_pom do |xml|
             group_id    = xml.xpath("/project/groupId").text
             artifact_id = xml.xpath("/project/artifactId").text
@@ -408,18 +410,7 @@ class Project
             group_id    = group_id == "" ? parent_group_id : group_id
             version     = version == ""  ? parent_version  : version
             
-            test_dependencies = xml.xpath("/project/dependencies/dependency[scope='test']") + xml.xpath("//dependencies/dependency[scope='test']")
-            test_dependencies.each do |dependency|
-                test_dependency = Dependency.new
-                test_dependency.group_id    = dependency.xpath("groupId").text
-                test_dependency.artifact_id = dependency.xpath("artifactId").text
-                test_dependency.version     = dependency.xpath("version").text
-                
-                if test_dependency.valid? && !test_dependency.jmh?
-                    Shell.log "\tImporting test dependency #{test_dependency.readable_string}"
-                    dependencies << test_dependency
-                end
-            end
+            all_test_dependencies += xml.xpath("/project/dependencies/dependency[scope='test']") + xml.xpath("//dependencies/dependency[scope='test']")
             
             dependency = Dependency.new
             dependency.group_id = group_id
@@ -429,11 +420,29 @@ class Project
             
             if dependency.valid? && dependency.exist?
                 Shell.log "\tImporting project dependency #{dependency.readable_string}"
-                dependencies << dependency
+                
+                if xml.xpath("/project/parent").size == 0
+                    parent_dependencies << dependency
+                else
+                    dependencies << dependency
             end
         end
         
-        return dependencies
+        all_test_dependencies.each do |dependency|
+            test_dependency = Dependency.new
+            test_dependency.group_id    = dependency.xpath("groupId").text
+            test_dependency.artifact_id = dependency.xpath("artifactId").text
+            test_dependency.version     = dependency.xpath("version").text
+            
+            if test_dependency.valid? && !test_dependency.jmh?
+                Shell.log "\tImporting test dependency #{test_dependency.readable_string}"
+                dependencies << test_dependency
+            end
+        end
+        
+        final_dependencies = parent_dependencies + dependencies
+        
+        return final_dependencies
     end
     
     def self.get_repositories
