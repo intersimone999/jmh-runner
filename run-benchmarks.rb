@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-VERSION = '0.1.7'
+VERSION = '0.1.8'
 
 require "nokogiri"
 require "set"
@@ -307,7 +307,8 @@ class Dependency
     end
     
     def exist?
-        return FileTest.exist?(File.join(@@mvn_path, @group_id.gsub('.', '/'), @artifact_id.gsub('.', '/'), @version))
+        folder = File.join(@@mvn_path, @group_id.gsub('.', '/'), @artifact_id.gsub('.', '/'), @version)
+        return FileTest.exist?(folder) && Dir.glob(File.join(folder, "*.jar")).size > 0
     end
     
     def jmh?
