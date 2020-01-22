@@ -425,6 +425,7 @@ class Project
                     parent_dependencies << dependency
                 else
                     dependencies << dependency
+                end
             end
         end
         
